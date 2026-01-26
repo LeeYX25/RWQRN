@@ -449,12 +449,12 @@ def get_rfweight(rf, x):
 
 def get_rfmatrix(x,y):
 
-    params_mrf = {'min_samples_split': [2, 3, 4, 5, 6, 7]}
+    params_mrf = {'min_samples_split': [2, 3, 4, 5, 6, 7,8,9,10]}
     if(len(y.shape)==1):
-        model = MondrianForestRegressor(n_estimators=200)
+        model = MondrianForestRegressor(n_estimators=100)
         print("Use MondrianForestRegressor")
     else:
-        model = RandomForestRegressor(n_estimators=200)
+        model = RandomForestRegressor(n_estimators=100)
         print("Use RandomForestRegressor")
     reg_mrf = GridSearchCV(model, params_mrf)
     n=x.shape[0]
