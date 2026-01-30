@@ -206,27 +206,60 @@ def fit_quantiles(X, y, tau, quantiles=0.5, lossfn = 'marginal',
             loss = tau * loss1 + (1 - tau) * loss2
         return loss
 
-    def generate_valid_u(n_quantiles, d_dim, device='cpu'):
+    def generate_u_from_tau(tau_list, d_dim, n_directions_per_tau=1, device='gpu'):
         """
-        Generates valid geometric quantile vectors u, ensuring ||u|| < 1.
-
+        Generate geometric quantile vectors u based on the given tau values.
+        
+        The magnitude of u is determined by the quantile level tau as ||u|| = |2*tau - 1|.
+        
         Args:
-            n_quantiles (int): Number of quantiles (M)
-            d_dim (int): Dimension of response variable (D)
-            device: 'cpu' or 'cuda'
-
+            tau_list (list[float]): List of quantile levels in the range [0, 1].
+            d_dim (int): Dimensionality of the output vectors (embedding dimension).
+            n_directions_per_tau (int, optional): Number of random directions to generate 
+                for each tau value. Defaults to 1.
+            device (str, optional): Device to place the output tensors on ('cpu' or 'cuda').
+                Defaults to 'gpu'.
+        
         Returns:
-            u_vectors (Tensor): Shape (M, D)
+            torch.Tensor: A tensor of shape (len(tau_list) * n_directions_per_tau, d_dim) 
+                containing the generated geometric quantile vectors.
+        
+        Note:
+            When tau = 0.5 (median), the magnitude becomes zero, resulting in zero vectors.
+            To prevent numerical instability from floating point errors, magnitudes are 
+            clamped to a maximum of 0.999.
         """
-        # 1. Generate random directions on the unit sphere
-        u_dirs = torch.randn(n_quantiles, d_dim, device=device)
-        u_dirs = u_dirs / (torch.norm(u_dirs, dim=1, keepdim=True) + 1e-8)
-
-        # 2. Randomly scale magnitudes to [0, 0.99]
-        # Critical: Norm must be strictly < 1 to ensure the loss is convex and non-negative
-        magnitudes = torch.rand(n_quantiles, 1, device=device) * 0.99
-
-        u_vectors = u_dirs * magnitudes
+        u_list = []
+    
+        for tau in tau_list:
+            # Compute the target magnitude based on the quantile level formula
+            # ||u|| = |2*tau - 1|, ranging from 1 (extreme quantiles) to 0 (median)
+            target_magnitude = abs(2 * tau - 1)
+    
+            # Clamp slightly below 1.0 to prevent potential numerical issues where 
+            # floating point errors might push the magnitude >= 1
+            target_magnitude = min(target_magnitude, 0.999)
+    
+            # Handle the median special case (tau = 0.5) where magnitude approaches zero
+            if target_magnitude < 1e-6:
+                # Generate zero vectors for the median case
+                for _ in range(n_directions_per_tau):
+                    u_list.append(torch.zeros(1, d_dim, device=device))
+                continue
+    
+            # Generate random directions with the specified magnitude
+            for _ in range(n_directions_per_tau):
+                # Sample a random direction from standard normal distribution and normalize
+                direction = torch.randn(1, d_dim, device=device)
+                direction = direction / (torch.norm(direction, dim=1, keepdim=True) + 1e-8)
+                
+                # Scale the unit direction vector to achieve the target magnitude
+                u = direction * target_magnitude
+                u_list.append(u)
+    
+        # Concatenate all vectors along the batch dimension
+        # All tensors are already on the correct device, avoiding redundant .to() calls
+        u_vectors = torch.cat(u_list, dim=0)
         return u_vectors
 
     def geometric_loss(yhat, tidx, tau, weight_matrix, u_vectors):
@@ -323,7 +356,7 @@ def fit_quantiles(X, y, tau, quantiles=0.5, lossfn = 'marginal',
         # Track the loss curves
         train_loss = torch.Tensor([0]).to(device)
         if losstype==3:
-            uvec = generate_valid_u(n_quantiles=tquantiles.shape[0], d_dim=y.shape[1], device=device)
+            uvec = generate_u_from_tau(n_quantiles=tquantiles.shape[0], d_dim=y.shape[1], device=device)
         else:
             uvec=None
         for batch_idx, batch in enumerate(batches(train_indices, batch_size, shuffle=True)):
