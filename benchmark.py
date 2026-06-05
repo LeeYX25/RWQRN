@@ -35,7 +35,7 @@ def run_multivariate_benchmarks(demo=True):
     quantiles = np.array([0.1,0.2])
     func = Scenario3()
     tau=0.01
-    model = QuantileNetwork(quantiles=quantiles,loss="geometric")#or loss="geometric" to use geometric loss
+    model = QuantileNetwork(quantiles=quantiles,loss="marginal")#or loss="geometric" to use geometric loss
     X_test = np.random.random(size=(N_test,func.n_in))
     y_test = func.sample(X_test)
     y_sample = np.array([func.sample(X_test)])
@@ -60,9 +60,9 @@ if __name__ == '__main__':
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        #run_benchmarks(False)
+        run_benchmarks(False)
 
-        run_multivariate_benchmarks(False)
+        #run_multivariate_benchmarks(False)
 
 
 
